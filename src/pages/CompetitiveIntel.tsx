@@ -31,6 +31,7 @@ const CompetitiveIntel = () => {
   const [report, setReport] = useState<CompetitorReport | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobOutputs, setJobOutputs] = useState<{ id: string; type: string; url: string | null }[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const userId = session?.user?.id;
 
@@ -60,8 +61,16 @@ const CompetitiveIntel = () => {
   }, [userId]);
 
   const handleAnalyze = async () => {
-    if (!userId) return;
+    if (!userId) {
+      setError("Please log in to analyze competitors.");
+      return;
+    }
     setLoading(true);
+    if (!supabaseEnabled || !supabase) {
+      setLoading(false);
+      setError("Supabase is not configured.");
+      return;
+    }
     const urlList = urls.filter((u) => u.trim().length > 0).join(", ");
     const newReport = {
       user_id: userId,
@@ -81,6 +90,7 @@ const CompetitiveIntel = () => {
     if (!error) {
       setReport(data as CompetitorReport);
       setHasAnalyzed(true);
+      setError(null);
       await supabase.from("activity_log").insert({
         user_id: userId,
         type: "intel",
@@ -96,10 +106,19 @@ const CompetitiveIntel = () => {
   };
 
   const handleGenerate = async () => {
-    if (!userId) return;
-    const urlList = urls.filter((u) => u.trim().length > 0);
-    const { jobId: createdId } = await createJob("competitor", { urls: urlList });
-    setJobId(createdId);
+    if (!userId) {
+      setError("Please log in to run the competitor job.");
+      return;
+    }
+    try {
+      const urlList = urls.filter((u) => u.trim().length > 0);
+      const { jobId: createdId } = await createJob("competitor", { urls: urlList });
+      setJobId(createdId);
+      setError(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setError(`Failed to send competitor request: ${msg}`);
+    }
   };
 
   useEffect(() => {
@@ -128,6 +147,7 @@ const CompetitiveIntel = () => {
 
         {/* Input */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card border rounded-xl p-6 mb-6">
+          {error && <div className="mb-4 text-sm text-destructive">{error}</div>}
           <Label className="text-sm mb-3 block">Competitor URLs</Label>
           <div className="space-y-2 mb-4">
             {urls.map((url, i) => (

@@ -95,12 +95,10 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
           <Button
+            type="button"
             variant="ghost"
             className="w-full justify-start rounded-lg"
-            onClick={async () => {
-              await supabase.auth.signOut();
-              navigate("/login", { replace: true });
-            }}
+            onClick={() => navigate("/logout")}
           >
             <LogOut className="h-4 w-4 mr-2" />
             Logout

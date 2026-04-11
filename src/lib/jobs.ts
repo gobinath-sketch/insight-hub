@@ -25,18 +25,26 @@ export async function uploadInputs(userId: string, files: File[]) {
   for (const file of files) {
     const path = `${userId}/${crypto.randomUUID()}-${file.name}`;
     const { error } = await supabase.storage.from("inputs").upload(path, file, { upsert: true });
-    if (!error) paths.push(path);
+    if (error) {
+      throw error;
+    }
+    paths.push(path);
   }
   return paths;
 }
 
 export async function createJob(type: JobType, input: Record<string, unknown>) {
   if (!supabaseEnabled || !supabase) throw new Error("Supabase not configured");
-  const { data, error } = await supabase.functions.invoke("create_job", {
-    body: { type, input },
-  });
-  if (error) throw error;
-  return data as { jobId: string };
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData?.user?.id;
+  if (!userId) throw new Error("Not authenticated");
+  const { data, error } = await supabase
+    .from("jobs")
+    .insert({ user_id: userId, type, status: "submitted", input_json: input })
+    .select("id")
+    .single();
+  if (error || !data?.id) throw error ?? new Error("Job insert failed");
+  return { jobId: data.id };
 }
 
 export async function listJobs(type?: JobType) {

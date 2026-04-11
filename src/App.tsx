@@ -17,6 +17,7 @@ import Analytics from "./pages/Analytics";
 import Billing from "./pages/Billing";
 import ApiKeys from "./pages/ApiKeys";
 import DashboardSettings from "./pages/DashboardSettings";
+import Logout from "./pages/Logout";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "@/components/auth/RequireAuth";
 import HandyScrapper from "./pages/HandyScrapper";
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/logout" element={<Logout />} />
             <Route element={<RequireAuth />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/dashboard/jobs" element={<JobFinder />} />

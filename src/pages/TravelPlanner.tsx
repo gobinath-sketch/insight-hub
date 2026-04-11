@@ -49,6 +49,7 @@ const TravelPlanner = () => {
   const [interests, setInterests] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobOutputs, setJobOutputs] = useState<{ id: string; type: string; url: string | null }[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const userId = session?.user?.id;
 
@@ -78,8 +79,16 @@ const TravelPlanner = () => {
   }, [userId]);
 
   const handlePlan = async () => {
-    if (!userId) return;
+    if (!userId) {
+      setError("Please log in to generate a travel plan.");
+      return;
+    }
     setLoading(true);
+    if (!supabaseEnabled || !supabase) {
+      setLoading(false);
+      setError("Supabase is not configured.");
+      return;
+    }
     const { data, error } = await supabase
       .from("travel_plans")
       .insert({
@@ -101,6 +110,7 @@ const TravelPlanner = () => {
     if (!error && data) {
       setPlan(data as TravelPlanRow);
       setHasPlanned(true);
+      setError(null);
       await supabase.from("activity_log").insert({
         user_id: userId,
         type: "travel",
@@ -116,17 +126,26 @@ const TravelPlanner = () => {
   };
 
   const handleGenerate = async () => {
-    if (!userId) return;
-    const { jobId: createdId } = await createJob("travel", {
-      destination,
-      dates,
-      budget,
-      travelers,
-      travelStyle,
-      pace,
-      interests,
-    });
-    setJobId(createdId);
+    if (!userId) {
+      setError("Please log in to run the travel job.");
+      return;
+    }
+    try {
+      const { jobId: createdId } = await createJob("travel", {
+        destination,
+        dates,
+        budget,
+        travelers,
+        travelStyle,
+        pace,
+        interests,
+      });
+      setJobId(createdId);
+      setError(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setError(`Failed to send travel request: ${msg}`);
+    }
   };
 
   useEffect(() => {
@@ -152,6 +171,7 @@ const TravelPlanner = () => {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card border rounded-xl p-6 mb-6">
+          {error && <div className="mb-4 text-sm text-destructive">{error}</div>}
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div>
               <Label className="text-sm mb-2 block">Destination</Label>

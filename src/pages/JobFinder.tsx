@@ -43,6 +43,8 @@ const JobFinder = () => {
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobOutputs, setJobOutputs] = useState<{ id: string; type: string; url: string | null }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
 
   const userId = session?.user?.id;
 
@@ -97,10 +99,17 @@ const JobFinder = () => {
   }, [userId, activeSearchId]);
 
   const handleSearch = async () => {
-    if (!userId) return;
+    if (!userId) {
+      setError("Please log in to start a job search.");
+      return;
+    }
     setLoading(true);
 
-    if (!supabase) return;
+    if (!supabase) {
+      setLoading(false);
+      setError("Supabase is not configured.");
+      return;
+    }
     const { data: searchRow, error: searchError } = await supabase
       .from("job_searches")
       .insert({
@@ -114,6 +123,7 @@ const JobFinder = () => {
       .single();
 
     if (searchError || !searchRow?.id) {
+      setError("Failed to start search. Check your database tables and RLS.");
       setLoading(false);
       return;
     }
@@ -152,22 +162,35 @@ const JobFinder = () => {
     await loadJobs(searchRow.id);
     setLoading(false);
     setHasSearched(true);
+    setError(null);
   };
 
   const handleGenerate = async () => {
-    if (!userId) return;
+    if (!userId) {
+      setError("Please log in to run the job generator.");
+      return;
+    }
     setLoading(true);
-    const uploaded = resumeFile ? await uploadInputs(userId, [resumeFile]) : [];
-    const { jobId: createdId } = await createJob("job", {
-      role,
-      location,
-      workType,
-      minSalary,
-      files: uploaded,
-    });
-    setJobId(createdId);
-    setLoading(false);
-    setHasSearched(true);
+    try {
+      const uploaded = resumeFile ? await uploadInputs(userId, [resumeFile]) : [];
+      const { jobId: createdId } = await createJob("job", {
+        role,
+        location,
+        workType,
+        minSalary,
+        files: uploaded,
+      });
+      setJobId(createdId);
+      setHasSearched(true);
+      setError(null);
+      setProcessing(true);
+      setTimeout(() => loadLatestSearch(), 4000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setError(`Failed to send job request: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -178,6 +201,7 @@ const JobFinder = () => {
         items.map(async (o) => ({ id: o.id, type: o.type, url: await getSignedUrl(o.storage_path) }))
       );
       setJobOutputs(urls);
+      if (urls.length) setProcessing(false);
     };
     loadOutputs();
   }, [jobId]);
@@ -197,6 +221,9 @@ const JobFinder = () => {
 
         {/* Input Form */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card border rounded-xl p-6 mb-6">
+          {error && (
+            <div className="mb-4 text-sm text-destructive">{error}</div>
+          )}
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div className="md:col-span-2 lg:col-span-4">
               <Label className="text-sm mb-2 block">Resume</Label>
@@ -256,6 +283,10 @@ const JobFinder = () => {
               ))}
             </div>
           </div>
+        )}
+
+        {processing && jobs.length === 0 && (
+          <div className="text-sm text-muted-foreground mb-4">Processing… results will appear shortly.</div>
         )}
 
         {/* Loading State */}

@@ -12,10 +12,13 @@ export function subscribeToTable<T>(
     return () => {};
   }
 
-  const channelId =
+  let channelId =
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random()}`;
+  if (!channelId || channelId.trim() === "") {
+    channelId = `${Date.now()}-${Math.random()}`;
+  }
 
   const channel = supabase
     .channel(`rt:${schema}:${table}:${channelId}`)

@@ -9,6 +9,7 @@ export function useSupabaseSession() {
 
   useEffect(() => {
     let mounted = true;
+    let lastSession: Session | null = null;
     const timeout = setTimeout(() => {
       if (mounted) setLoading(false);
     }, 1500);
@@ -22,25 +23,41 @@ export function useSupabaseSession() {
 
     supabase.auth.getSession().then(async ({ data, error }) => {
       if (!mounted) return;
-      if (error) {
-        setSession(null);
-      } else {
-        setSession(data.session ?? null);
-        await ensureUserProfile(data.session ?? null);
+      if (!error) {
+        lastSession = data.session ?? null;
+        setSession(lastSession);
+        await ensureUserProfile(lastSession);
       }
       setLoading(false);
       clearTimeout(timeout);
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      lastSession = nextSession;
       setSession(nextSession);
       await ensureUserProfile(nextSession);
     });
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        supabase.auth.getSession().then(({ data, error }) => {
+          if (!mounted) return;
+          if (error) return;
+          if (data.session?.access_token !== lastSession?.access_token) {
+            lastSession = data.session ?? null;
+            setSession(lastSession);
+          }
+        });
+      }
+    };
+
+    window.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       mounted = false;
       clearTimeout(timeout);
       subscription.subscription.unsubscribe();
+      window.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 
