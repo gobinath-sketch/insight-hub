@@ -72,7 +72,7 @@ const Dashboard = () => {
     loadActivity();
 
     const unsubActivity = subscribeToTable<ActivityItem>("activity_log", (payload) => {
-      if (payload.new?.user_id !== userId) return;
+      if ((payload.new as any)?.user_id !== userId) return;
       loadActivity();
     });
 

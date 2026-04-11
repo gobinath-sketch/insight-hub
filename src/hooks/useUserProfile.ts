@@ -37,7 +37,7 @@ export function useUserProfile() {
       });
 
     const unsubscribe = subscribeToTable<UserProfile>("profiles", (payload) => {
-      if (payload.new?.id === userId) {
+      if ((payload.new as any)?.id === userId) {
         setProfile(payload.new as UserProfile);
       }
     });
