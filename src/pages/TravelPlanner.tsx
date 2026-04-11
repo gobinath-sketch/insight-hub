@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Plane, Search, MapPin, Clock, DollarSign, Utensils, Camera, Sun, CloudRain, FileText, Star } from "lucide-react";
+import { supabase, supabaseEnabled } from "@/lib/supabaseClient";
+import { useSupabaseSession } from "@/hooks/useSupabaseSession";
+import { subscribeToTable } from "@/lib/realtime";
 
 type DayPlan = {
   day: number;
@@ -16,55 +19,97 @@ type DayPlan = {
   weather: string;
 };
 
-const mockItinerary: DayPlan[] = [
-  {
-    day: 1, title: "Arrival & Shibuya Exploration", weather: "Partly Cloudy, 22°C",
-    activities: [
-      { time: "10:00", activity: "Arrive at Narita, take Skyliner to Ueno", type: "transport", cost: "$25", tip: "Buy Suica card at the airport" },
-      { time: "13:00", activity: "Lunch at Ichiran Ramen, Shibuya", type: "food", cost: "$12", tip: "Go before noon to avoid queues" },
-      { time: "14:30", activity: "Shibuya Crossing & Hachiko Statue", type: "attraction", cost: "Free", tip: "Best view from Shibuya Sky or Starbucks above" },
-      { time: "16:00", activity: "Meiji Shrine & Harajuku", type: "attraction", cost: "Free", tip: "Walk through Takeshita Street after" },
-      { time: "19:00", activity: "Dinner at Gonpachi (Kill Bill restaurant)", type: "food", cost: "$35", tip: "Reserve ahead. Hidden gem for atmosphere." },
-    ],
-  },
-  {
-    day: 2, title: "Asakusa, Akihabara & Ueno", weather: "Sunny, 24°C",
-    activities: [
-      { time: "08:00", activity: "Senso-ji Temple & Nakamise Street", type: "attraction", cost: "Free", tip: "Arrive early for fewer crowds" },
-      { time: "11:00", activity: "Tokyo Skytree observation deck", type: "attraction", cost: "$20", tip: "Book online for fast-track entry" },
-      { time: "13:00", activity: "Lunch at a local soba shop in Asakusa", type: "food", cost: "$10", tip: "Try tempura soba" },
-      { time: "15:00", activity: "Akihabara electronics & anime district", type: "attraction", cost: "Varies", tip: "Visit Super Potato for retro games" },
-      { time: "19:00", activity: "Dinner at izakaya in Ueno", type: "food", cost: "$25", tip: "Look for lantern-lit alleys" },
-    ],
-  },
-  {
-    day: 3, title: "Tsukiji, Ginza & Odaiba", weather: "Sunny, 26°C",
-    activities: [
-      { time: "07:00", activity: "Tsukiji Outer Market breakfast", type: "food", cost: "$15", tip: "Get fresh sashimi and tamagoyaki" },
-      { time: "10:00", activity: "teamLab Borderless (Odaiba)", type: "attraction", cost: "$30", tip: "Wear white clothing for best photo effects" },
-      { time: "13:00", activity: "Lunch at Decks Tokyo Beach", type: "food", cost: "$18", tip: "Try the takoyaki museum" },
-      { time: "15:00", activity: "Ginza shopping district", type: "attraction", cost: "Free", tip: "Visit Uniqlo flagship on weekdays" },
-      { time: "19:00", activity: "Dinner in Roppongi", type: "food", cost: "$40", tip: "Roppongi Hills has great sunset views" },
-    ],
-  },
-];
-
-const budgetBreakdown = [
-  { category: "Flights", amount: "$850", pct: 40 },
-  { category: "Accommodation", amount: "$600", pct: 28 },
-  { category: "Food", amount: "$350", pct: 16 },
-  { category: "Activities", amount: "$200", pct: 9 },
-  { category: "Transport", amount: "$150", pct: 7 },
-];
+type TravelPlanRow = {
+  id: string;
+  destination: string;
+  dates: string;
+  budget: string;
+  travelers: string;
+  travel_style: string;
+  pace: string;
+  interests: string;
+  itinerary: DayPlan[];
+  budget_breakdown: { category: string; amount: string; pct: number }[];
+  packing_list: string[];
+};
 
 const TravelPlanner = () => {
+  const { session } = useSupabaseSession();
   const [hasPlanned, setHasPlanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [expandedDay, setExpandedDay] = useState(1);
+  const [plan, setPlan] = useState<TravelPlanRow | null>(null);
+  const [destination, setDestination] = useState("");
+  const [dates, setDates] = useState("");
+  const [budget, setBudget] = useState("");
+  const [travelers, setTravelers] = useState("1");
+  const [travelStyle, setTravelStyle] = useState("balanced");
+  const [pace, setPace] = useState("moderate");
+  const [interests, setInterests] = useState("");
 
-  const handlePlan = () => {
+  const userId = session?.user?.id;
+
+  const loadLatestPlan = async () => {
+    if (!userId || !supabaseEnabled || !supabase) return;
+    const { data } = await supabase
+      .from("travel_plans")
+      .select("id,destination,dates,budget,travelers,travel_style,pace,interests,itinerary,budget_breakdown,packing_list")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      setPlan(data as TravelPlanRow);
+      setHasPlanned(true);
+    }
+  };
+
+  useEffect(() => {
+    if (!userId || !supabaseEnabled || !supabase) return;
+    loadLatestPlan();
+    const unsub = subscribeToTable<TravelPlanRow>("travel_plans", (payload) => {
+      if (payload.new?.user_id !== userId) return;
+      loadLatestPlan();
+    });
+    return () => unsub();
+  }, [userId]);
+
+  const handlePlan = async () => {
+    if (!userId) return;
     setLoading(true);
-    setTimeout(() => { setLoading(false); setHasPlanned(true); }, 2000);
+    const { data, error } = await supabase
+      .from("travel_plans")
+      .insert({
+        user_id: userId,
+        destination,
+        dates,
+        budget,
+        travelers,
+        travel_style: travelStyle,
+        pace,
+        interests,
+        itinerary: [],
+        budget_breakdown: [],
+        packing_list: [],
+      })
+      .select("id,destination,dates,budget,travelers,travel_style,pace,interests,itinerary,budget_breakdown,packing_list")
+      .single();
+
+    if (!error && data) {
+      setPlan(data as TravelPlanRow);
+      setHasPlanned(true);
+      await supabase.from("activity_log").insert({
+        user_id: userId,
+        type: "travel",
+        title: `Itinerary generated for ${destination}`,
+      });
+      await supabase.from("usage_events").insert({
+        user_id: userId,
+        event_type: "travel",
+        credits_used: 3,
+      });
+    }
+    setLoading(false);
   };
 
   const typeIcons = { attraction: Camera, food: Utensils, transport: Plane, rest: Sun };
@@ -81,19 +126,19 @@ const TravelPlanner = () => {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div>
               <Label className="text-sm mb-2 block">Destination</Label>
-              <Input placeholder="e.g. Tokyo, Japan" className="rounded-xl h-10" defaultValue="Tokyo, Japan" />
+              <Input className="rounded-xl h-10" value={destination} onChange={(e) => setDestination(e.target.value)} />
             </div>
             <div>
               <Label className="text-sm mb-2 block">Dates</Label>
-              <Input type="text" placeholder="Jul 15 – Jul 22" className="rounded-xl h-10" defaultValue="Jul 15 – Jul 22" />
+              <Input type="text" className="rounded-xl h-10" value={dates} onChange={(e) => setDates(e.target.value)} />
             </div>
             <div>
               <Label className="text-sm mb-2 block">Budget</Label>
-              <Input placeholder="e.g. $2,500" className="rounded-xl h-10" defaultValue="$2,500" />
+              <Input className="rounded-xl h-10" value={budget} onChange={(e) => setBudget(e.target.value)} />
             </div>
             <div>
               <Label className="text-sm mb-2 block">Travelers</Label>
-              <Select defaultValue="2">
+              <Select value={travelers} onValueChange={setTravelers}>
                 <SelectTrigger className="rounded-xl h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">1 person</SelectItem>
@@ -105,7 +150,7 @@ const TravelPlanner = () => {
             </div>
             <div>
               <Label className="text-sm mb-2 block">Travel Style</Label>
-              <Select defaultValue="balanced">
+              <Select value={travelStyle} onValueChange={setTravelStyle}>
                 <SelectTrigger className="rounded-xl h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="budget">Budget</SelectItem>
@@ -116,7 +161,7 @@ const TravelPlanner = () => {
             </div>
             <div>
               <Label className="text-sm mb-2 block">Pace</Label>
-              <Select defaultValue="moderate">
+              <Select value={pace} onValueChange={setPace}>
                 <SelectTrigger className="rounded-xl h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="relaxed">Relaxed</SelectItem>
@@ -127,7 +172,7 @@ const TravelPlanner = () => {
             </div>
             <div className="md:col-span-2">
               <Label className="text-sm mb-2 block">Interests</Label>
-              <Input placeholder="e.g. food, culture, nightlife, nature" className="rounded-xl h-10" defaultValue="food, culture, technology, photography" />
+              <Input className="rounded-xl h-10" value={interests} onChange={(e) => setInterests(e.target.value)} />
             </div>
           </div>
           <Button onClick={handlePlan} className="rounded-xl h-10">
@@ -147,10 +192,10 @@ const TravelPlanner = () => {
           </div>
         )}
 
-        {hasPlanned && !loading && (
+        {hasPlanned && !loading && plan && (
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
-              {mockItinerary.map((day) => (
+              {plan.itinerary.map((day) => (
                 <motion.div
                   key={day.day}
                   initial={{ opacity: 0, y: 10 }}
@@ -205,7 +250,7 @@ const TravelPlanner = () => {
               <div className="bg-card border rounded-xl p-5">
                 <h3 className="font-medium mb-4 flex items-center gap-2"><DollarSign className="h-4 w-4" /> Budget Breakdown</h3>
                 <div className="space-y-3">
-                  {budgetBreakdown.map((b) => (
+                  {plan.budget_breakdown.map((b) => (
                     <div key={b.category}>
                       <div className="flex justify-between text-sm mb-1">
                         <span>{b.category}</span>
@@ -219,14 +264,14 @@ const TravelPlanner = () => {
                 </div>
                 <div className="flex justify-between mt-4 pt-4 border-t text-sm font-medium">
                   <span>Total</span>
-                  <span>$2,150</span>
+                  <span>{budget}</span>
                 </div>
               </div>
 
               <div className="bg-card border rounded-xl p-5">
                 <h3 className="font-medium mb-3 flex items-center gap-2"><MapPin className="h-4 w-4" /> Packing Essentials</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground">
-                  {["Comfortable walking shoes", "Portable Wi-Fi / SIM card", "Power adapter (Type A/B)", "Light rain jacket", "Cash (many places cash-only)", "Suica/Pasmo transit card"].map((i) => (
+                  {plan.packing_list.map((i) => (
                     <li key={i} className="flex items-center gap-2"><div className="h-1 w-1 rounded-full bg-foreground/30" />{i}</li>
                   ))}
                 </ul>
@@ -237,13 +282,7 @@ const TravelPlanner = () => {
           </div>
         )}
 
-        {!hasPlanned && !loading && (
-          <div className="text-center py-20 text-muted-foreground">
-            <Plane className="h-12 w-12 mx-auto mb-4 opacity-20" />
-            <p className="text-lg font-medium mb-1">No trips planned yet</p>
-            <p className="text-sm">Enter your destination and preferences to generate an itinerary.</p>
-          </div>
-        )}
+        {!hasPlanned && !loading && <div className="py-10" />}
       </div>
     </DashboardLayout>
   );

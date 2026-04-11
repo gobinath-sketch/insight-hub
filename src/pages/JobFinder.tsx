@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -8,39 +8,153 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Upload, Search, MapPin, DollarSign, Briefcase, Star, ExternalLink, ChevronRight, FileText, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { supabase, supabaseEnabled } from "@/lib/supabaseClient";
+import { useSupabaseSession } from "@/hooks/useSupabaseSession";
+import { subscribeToTable } from "@/lib/realtime";
 
 type Job = {
-  id: number;
+  id: string;
   title: string;
   company: string;
   location: string;
   salary: string;
-  matchScore: number;
+  match_score: number;
   source: string;
   remote: boolean;
-  missingSkills: string[];
-  whyFit: string;
+  missing_skills: string[];
+  why_fit: string;
   posted: string;
+  search_id: string;
 };
 
-const mockJobs: Job[] = [
-  { id: 1, title: "Senior Frontend Engineer", company: "Vercel", location: "Remote", salary: "$160k–$200k", matchScore: 96, source: "LinkedIn", remote: true, missingSkills: [], whyFit: "Strong React/TypeScript experience aligns perfectly with role requirements.", posted: "2d ago" },
-  { id: 2, title: "Staff Software Engineer", company: "Linear", location: "San Francisco, CA", salary: "$180k–$240k", matchScore: 91, source: "Wellfound", remote: false, missingSkills: ["Rust"], whyFit: "Excellent systems design background. Missing Rust experience but transferable skills present.", posted: "1d ago" },
-  { id: 3, title: "Full Stack Engineer", company: "Notion", location: "Remote", salary: "$150k–$190k", matchScore: 88, source: "Indeed", remote: true, missingSkills: ["PostgreSQL"], whyFit: "Strong full-stack profile. Would benefit from deeper database expertise.", posted: "3d ago" },
-  { id: 4, title: "Product Engineer", company: "Figma", location: "New York, NY", salary: "$170k–$210k", matchScore: 85, source: "Glassdoor", remote: false, missingSkills: ["C++", "WebGL"], whyFit: "Product mindset is strong. Graphics programming is a gap.", posted: "5d ago" },
-  { id: 5, title: "Backend Engineer", company: "Stripe", location: "Remote", salary: "$175k–$225k", matchScore: 79, source: "LinkedIn", remote: true, missingSkills: ["Ruby", "Go"], whyFit: "Payment systems experience limited but strong API design skills.", posted: "1w ago" },
-];
-
 const JobFinder = () => {
+  const { session } = useSupabaseSession();
   const [hasSearched, setHasSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [fileName, setFileName] = useState("");
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [role, setRole] = useState("");
+  const [location, setLocation] = useState("");
+  const [workType, setWorkType] = useState("any");
+  const [minSalary, setMinSalary] = useState("");
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
 
-  const handleSearch = () => {
-    setLoading(true);
-    setTimeout(() => { setLoading(false); setHasSearched(true); }, 1500);
+  const userId = session?.user?.id;
+
+  const loadLatestSearch = async () => {
+    if (!userId || !supabaseEnabled) return;
+    if (!supabase) return;
+    const { data: search } = await supabase
+      .from("job_searches")
+      .select("id,role,location,work_type,min_salary,resume_path")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!search?.id) return;
+    setActiveSearchId(search.id);
+    setHasSearched(true);
+    setRole(search.role ?? "");
+    setLocation(search.location ?? "");
+    setWorkType(search.work_type ?? "any");
+    setMinSalary(search.min_salary ?? "");
+    await loadJobs(search.id);
   };
+
+  const loadJobs = async (searchId: string) => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from("job_results")
+      .select("id,title,company,location,salary,match_score,source,remote,missing_skills,why_fit,posted,search_id")
+      .eq("search_id", searchId)
+      .order("match_score", { ascending: false });
+    setJobs((data as Job[]) ?? []);
+  };
+
+  useEffect(() => {
+    if (!userId) return;
+    loadLatestSearch();
+
+    const unsubSearches = subscribeToTable("job_searches", (payload) => {
+      if (payload.new?.user_id !== userId) return;
+      loadLatestSearch();
+    });
+    const unsubJobs = subscribeToTable("job_results", (payload) => {
+      if (!activeSearchId) return;
+      if (payload.new?.search_id !== activeSearchId) return;
+      loadJobs(activeSearchId);
+    });
+
+    return () => {
+      unsubSearches();
+      unsubJobs();
+    };
+  }, [userId, activeSearchId]);
+
+  const handleSearch = async () => {
+    if (!userId) return;
+    setLoading(true);
+
+    if (!supabase) return;
+    const { data: searchRow, error: searchError } = await supabase
+      .from("job_searches")
+      .insert({
+        user_id: userId,
+        role,
+        location,
+        work_type: workType,
+        min_salary: minSalary,
+      })
+      .select("id")
+      .single();
+
+    if (searchError || !searchRow?.id) {
+      setLoading(false);
+      return;
+    }
+
+    let resumePath: string | null = null;
+    if (resumeFile) {
+      const path = `${userId}/${searchRow.id}/${resumeFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("resumes")
+        .upload(path, resumeFile, { upsert: true });
+      if (!uploadError) {
+        resumePath = path;
+      }
+    }
+
+    if (resumePath) {
+      await supabase
+        .from("job_searches")
+        .update({ resume_path: resumePath })
+        .eq("id", searchRow.id);
+    }
+
+    // Job results should be inserted by your real matching pipeline.
+    await supabase.from("activity_log").insert({
+      user_id: userId,
+      type: "job",
+      title: `${role || "Job"} search completed`,
+    });
+    await supabase.from("usage_events").insert({
+      user_id: userId,
+      event_type: "jobs",
+      credits_used: 1,
+    });
+
+    setActiveSearchId(searchRow.id);
+    await loadJobs(searchRow.id);
+    setLoading(false);
+    setHasSearched(true);
+  };
+
+  const jobsFoundText = useMemo(
+    () => `${jobs.length} jobs found across 6 platforms`,
+    [jobs.length]
+  );
 
   return (
     <DashboardLayout>
@@ -57,21 +171,30 @@ const JobFinder = () => {
               <Label className="text-sm mb-2 block">Resume</Label>
               <label className="flex items-center gap-3 p-4 border-2 border-dashed rounded-xl cursor-pointer hover:border-foreground/20 transition-colors">
                 <Upload className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">{fileName || "Drop PDF or DOCX here, or click to browse"}</span>
-                <input type="file" className="hidden" accept=".pdf,.docx" onChange={(e) => setFileName(e.target.files?.[0]?.name || "")} />
+                <span className="text-sm text-muted-foreground">{fileName}</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.docx"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    setResumeFile(file);
+                    setFileName(file?.name || "");
+                  }}
+                />
               </label>
             </div>
             <div>
               <Label className="text-sm mb-2 block">Role</Label>
-              <Input placeholder="e.g. Frontend Engineer" className="rounded-xl h-10" />
+              <Input className="rounded-xl h-10" value={role} onChange={(e) => setRole(e.target.value)} />
             </div>
             <div>
               <Label className="text-sm mb-2 block">Location</Label>
-              <Input placeholder="e.g. San Francisco" className="rounded-xl h-10" />
+              <Input className="rounded-xl h-10" value={location} onChange={(e) => setLocation(e.target.value)} />
             </div>
             <div>
               <Label className="text-sm mb-2 block">Work Type</Label>
-              <Select defaultValue="any">
+              <Select value={workType} onValueChange={setWorkType}>
                 <SelectTrigger className="rounded-xl h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="any">Any</SelectItem>
@@ -83,7 +206,7 @@ const JobFinder = () => {
             </div>
             <div>
               <Label className="text-sm mb-2 block">Min Salary</Label>
-              <Input placeholder="e.g. $120k" className="rounded-xl h-10" />
+              <Input className="rounded-xl h-10" value={minSalary} onChange={(e) => setMinSalary(e.target.value)} />
             </div>
           </div>
           <Button onClick={handleSearch} className="rounded-xl h-10">
@@ -116,7 +239,7 @@ const JobFinder = () => {
           <div className="flex gap-6">
             <div className="flex-1 space-y-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-muted-foreground">{mockJobs.length} jobs found across 6 platforms</p>
+                <p className="text-sm text-muted-foreground">{jobsFoundText}</p>
                 <Select defaultValue="match">
                   <SelectTrigger className="w-40 rounded-lg h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -126,7 +249,7 @@ const JobFinder = () => {
                   </SelectContent>
                 </Select>
               </div>
-              {mockJobs.map((job) => (
+              {jobs.map((job) => (
                 <motion.div
                   key={job.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -144,8 +267,8 @@ const JobFinder = () => {
                           <h3 className="font-medium">{job.title}</h3>
                           <p className="text-sm text-muted-foreground">{job.company}</p>
                         </div>
-                        <div className={`text-lg font-bold ${job.matchScore >= 90 ? "text-foreground" : job.matchScore >= 80 ? "text-muted-foreground" : "text-muted-foreground/60"}`}>
-                          {job.matchScore}%
+                        <div className={`text-lg font-bold ${job.match_score >= 90 ? "text-foreground" : job.match_score >= 80 ? "text-muted-foreground" : "text-muted-foreground/60"}`}>
+                          {job.match_score}%
                         </div>
                       </div>
                       <div className="flex items-center gap-3 mt-2 flex-wrap">
@@ -154,10 +277,10 @@ const JobFinder = () => {
                         <Badge variant="secondary" className="text-xs rounded-md">{job.source}</Badge>
                         {job.remote && <Badge variant="outline" className="text-xs rounded-md">Remote</Badge>}
                       </div>
-                      {job.missingSkills.length > 0 && (
+                      {(job.missing_skills?.length ?? 0) > 0 && (
                         <div className="flex items-center gap-1.5 mt-2">
                           <AlertTriangle className="h-3 w-3 text-warning" />
-                          <span className="text-xs text-muted-foreground">Missing: {job.missingSkills.join(", ")}</span>
+                          <span className="text-xs text-muted-foreground">Missing: {job.missing_skills.join(", ")}</span>
                         </div>
                       )}
                     </div>
@@ -179,18 +302,18 @@ const JobFinder = () => {
                     <p className="text-muted-foreground text-sm">{selectedJob.company} · {selectedJob.posted}</p>
                   </div>
                   <div className="text-center py-4 bg-muted rounded-xl">
-                    <p className="text-3xl font-bold">{selectedJob.matchScore}%</p>
+                    <p className="text-3xl font-bold">{selectedJob.match_score ?? 0}%</p>
                     <p className="text-xs text-muted-foreground">Match Score</p>
                   </div>
                   <div>
                     <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5"><Star className="h-3.5 w-3.5" /> Why you fit</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{selectedJob.whyFit}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{selectedJob.why_fit}</p>
                   </div>
-                  {selectedJob.missingSkills.length > 0 && (
+                  {(selectedJob.missing_skills?.length ?? 0) > 0 && (
                     <div>
                       <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Skill gaps</h3>
                       <div className="flex flex-wrap gap-1.5">
-                        {selectedJob.missingSkills.map((s) => (
+                        {selectedJob.missing_skills.map((s) => (
                           <Badge key={s} variant="secondary" className="rounded-md">{s}</Badge>
                         ))}
                       </div>
@@ -207,13 +330,7 @@ const JobFinder = () => {
         )}
 
         {/* Empty State */}
-        {!hasSearched && !loading && (
-          <div className="text-center py-20 text-muted-foreground">
-            <Briefcase className="h-12 w-12 mx-auto mb-4 opacity-20" />
-            <p className="text-lg font-medium mb-1">No searches yet</p>
-            <p className="text-sm">Upload your resume and set filters to find matching jobs.</p>
-          </div>
-        )}
+        {!hasSearched && !loading && <div className="py-10" />}
       </div>
     </DashboardLayout>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Shield, Search, Globe, TrendingUp, TrendingDown, Minus, AlertTriangle, FileText, Plus, X } from "lucide-react";
+import { supabase, supabaseEnabled } from "@/lib/supabaseClient";
+import { useSupabaseSession } from "@/hooks/useSupabaseSession";
+import { subscribeToTable } from "@/lib/realtime";
 
 type CompetitorReport = {
+  id?: string;
   name: string;
   url: string;
   swot: { strengths: string[]; weaknesses: string[]; opportunities: string[]; threats: string[] };
@@ -18,34 +22,79 @@ type CompetitorReport = {
   direction: string;
 };
 
-const mockReport: CompetitorReport = {
-  name: "Acme Corp",
-  url: "acme.com",
-  swot: {
-    strengths: ["Strong brand recognition", "Large enterprise customer base", "Robust API ecosystem"],
-    weaknesses: ["Slow feature velocity", "Complex onboarding", "No free tier"],
-    opportunities: ["AI integration gap", "SMB market underserved", "Mobile experience lacking"],
-    threats: ["New VC-funded competitors", "Open-source alternatives", "Pricing pressure"],
-  },
-  pricing: [
-    { tier: "Starter", price: "$49/mo", features: ["5 users", "Basic analytics", "Email support"] },
-    { tier: "Pro", price: "$149/mo", features: ["25 users", "Advanced analytics", "Priority support", "API access"] },
-    { tier: "Enterprise", price: "Custom", features: ["Unlimited users", "Custom integrations", "Dedicated CSM", "SLA"] },
-  ],
-  signals: ["Hiring 3 ML engineers", "New VP of Product from Stripe", "Blog mentions AI roadmap", "Raised Series C $50M"],
-  positioning: "Enterprise-first platform positioning with emphasis on compliance and security. Messaging targets CTOs and CISOs.",
-  direction: "Likely pivoting toward AI-assisted workflows based on recent hires and blog content. Expected product launch Q3 2026.",
-};
-
 const CompetitiveIntel = () => {
+  const { session } = useSupabaseSession();
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [urls, setUrls] = useState([""]);
+  const [report, setReport] = useState<CompetitorReport | null>(null);
 
-  const handleAnalyze = () => {
-    setLoading(true);
-    setTimeout(() => { setLoading(false); setHasAnalyzed(true); }, 2000);
+  const userId = session?.user?.id;
+
+  const loadLatestReport = async () => {
+    if (!userId || !supabaseEnabled || !supabase) return;
+    const { data } = await supabase
+      .from("competitor_reports")
+      .select("id,name,url,swot,pricing,signals,positioning,direction")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      setReport(data as CompetitorReport);
+      setHasAnalyzed(true);
+    }
   };
+
+  useEffect(() => {
+    if (!userId || !supabaseEnabled || !supabase) return;
+    loadLatestReport();
+    const unsub = subscribeToTable<CompetitorReport>("competitor_reports", (payload) => {
+      if (payload.new?.user_id !== userId) return;
+      loadLatestReport();
+    });
+    return () => unsub();
+  }, [userId]);
+
+  const handleAnalyze = async () => {
+    if (!userId) return;
+    setLoading(true);
+    const urlList = urls.filter((u) => u.trim().length > 0).join(", ");
+    const newReport = {
+      user_id: userId,
+      name: urlList || "Competitor",
+      url: urlList,
+      swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] },
+      pricing: [],
+      signals: [],
+      positioning: "",
+      direction: "",
+    };
+    const { data, error } = await supabase
+      .from("competitor_reports")
+      .insert(newReport)
+      .select("id,name,url,swot,pricing,signals,positioning,direction")
+      .single();
+    if (!error) {
+      setReport(data as CompetitorReport);
+      setHasAnalyzed(true);
+      await supabase.from("activity_log").insert({
+        user_id: userId,
+        type: "intel",
+        title: `Competitive report created for ${data?.name ?? "competitor"}`,
+      });
+      await supabase.from("usage_events").insert({
+        user_id: userId,
+        event_type: "intel",
+        credits_used: 2,
+      });
+    }
+    setLoading(false);
+  };
+
+  const swot = report?.swot ?? { strengths: [], weaknesses: [], opportunities: [], threats: [] };
+  const pricing = report?.pricing ?? [];
+  const signals = report?.signals ?? [];
 
   return (
     <DashboardLayout>
@@ -64,7 +113,6 @@ const CompetitiveIntel = () => {
                 <Input
                   value={url}
                   onChange={(e) => { const n = [...urls]; n[i] = e.target.value; setUrls(n); }}
-                  placeholder="https://competitor.com"
                   className="rounded-xl h-10"
                 />
                 {urls.length > 1 && (
@@ -98,7 +146,7 @@ const CompetitiveIntel = () => {
           </div>
         )}
 
-        {hasAnalyzed && !loading && (
+        {hasAnalyzed && !loading && report && (
           <div className="space-y-6">
             {/* Executive Summary */}
             <div className="bg-card border rounded-xl p-6">
@@ -107,18 +155,18 @@ const CompetitiveIntel = () => {
                   <Globe className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="font-semibold">{mockReport.name}</h2>
-                  <p className="text-sm text-muted-foreground">{mockReport.url}</p>
+                  <h2 className="font-semibold">{report.name}</h2>
+                  <p className="text-sm text-muted-foreground">{report.url}</p>
                 </div>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-medium mb-2">Positioning</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{mockReport.positioning}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{report.positioning}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium mb-2">Predicted Direction</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{mockReport.direction}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{report.direction}</p>
                 </div>
               </div>
             </div>
@@ -134,11 +182,11 @@ const CompetitiveIntel = () => {
                       <Icon className="h-4 w-4" /> {key}
                     </h3>
                     <ul className="space-y-2">
-                      {mockReport.swot[key].map((item) => (
-                        <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
-                          <Minus className="h-3 w-3 mt-1 shrink-0" /> {item}
-                        </li>
-                      ))}
+                      {(swot[key] ?? []).map((item) => (
+                          <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
+                            <Minus className="h-3 w-3 mt-1 shrink-0" /> {item}
+                          </li>
+                        ))}
                     </ul>
                   </motion.div>
                 );
@@ -149,19 +197,19 @@ const CompetitiveIntel = () => {
             <div className="bg-card border rounded-xl p-6">
               <h3 className="font-medium mb-4">Pricing Breakdown</h3>
               <div className="grid md:grid-cols-3 gap-4">
-                {mockReport.pricing.map((p) => (
-                  <div key={p.tier} className="border rounded-xl p-4">
-                    <p className="font-medium">{p.tier}</p>
-                    <p className="text-2xl font-bold mt-1 mb-3">{p.price}</p>
-                    <ul className="space-y-1.5">
-                      {p.features.map((f) => (
-                        <li key={f} className="text-sm text-muted-foreground flex items-center gap-1.5">
-                          <div className="h-1 w-1 rounded-full bg-foreground/30" /> {f}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                {pricing.map((p) => (
+                    <div key={p.tier} className="border rounded-xl p-4">
+                      <p className="font-medium">{p.tier}</p>
+                      <p className="text-2xl font-bold mt-1 mb-3">{p.price}</p>
+                      <ul className="space-y-1.5">
+                        {p.features.map((f) => (
+                          <li key={f} className="text-sm text-muted-foreground flex items-center gap-1.5">
+                            <div className="h-1 w-1 rounded-full bg-foreground/30" /> {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
               </div>
             </div>
 
@@ -169,12 +217,12 @@ const CompetitiveIntel = () => {
             <div className="bg-card border rounded-xl p-6">
               <h3 className="font-medium mb-4">Hiring & Strategy Signals</h3>
               <div className="grid md:grid-cols-2 gap-3">
-                {mockReport.signals.map((s) => (
-                  <div key={s} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                    <div className="h-2 w-2 rounded-full bg-foreground/30 shrink-0" />
-                    <span className="text-sm">{s}</span>
-                  </div>
-                ))}
+                {signals.map((s) => (
+                    <div key={s} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <div className="h-2 w-2 rounded-full bg-foreground/30 shrink-0" />
+                      <span className="text-sm">{s}</span>
+                    </div>
+                  ))}
               </div>
             </div>
 
@@ -182,13 +230,7 @@ const CompetitiveIntel = () => {
           </div>
         )}
 
-        {!hasAnalyzed && !loading && (
-          <div className="text-center py-20 text-muted-foreground">
-            <Shield className="h-12 w-12 mx-auto mb-4 opacity-20" />
-            <p className="text-lg font-medium mb-1">No reports yet</p>
-            <p className="text-sm">Enter competitor URLs to generate intelligence reports.</p>
-          </div>
-        )}
+        {!hasAnalyzed && !loading && <div className="py-10" />}
       </div>
     </DashboardLayout>
   );

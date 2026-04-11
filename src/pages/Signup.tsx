@@ -1,14 +1,18 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabaseClient";
 
 const Signup = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen flex items-center justify-center px-6">
@@ -22,20 +26,45 @@ const Signup = () => {
           <h1 className="text-2xl font-bold">Create your account</h1>
           <p className="text-sm text-muted-foreground mt-1">Start your free trial today</p>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); window.location.href = "/dashboard"; }} className="space-y-4">
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setErrorMessage("");
+            setSubmitting(true);
+            const { error } = await supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                data: { full_name: name },
+              },
+            });
+            setSubmitting(false);
+            if (error) {
+              setErrorMessage(error.message);
+              return;
+            }
+            navigate("/dashboard", { replace: true });
+          }}
+          className="space-y-4"
+        >
           <div className="space-y-2">
             <Label htmlFor="name">Full name</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" className="rounded-xl h-11" />
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl h-11" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="rounded-xl h-11" />
+            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-xl h-11" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="rounded-xl h-11" />
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="rounded-xl h-11" />
           </div>
-          <Button type="submit" className="w-full rounded-xl h-11">Create account</Button>
+          <Button type="submit" className="w-full rounded-xl h-11" disabled={submitting}>
+            {submitting ? "Creating..." : "Create account"}
+          </Button>
+          {errorMessage ? (
+            <p className="text-sm text-destructive">{errorMessage}</p>
+          ) : null}
         </form>
         <p className="text-center text-sm text-muted-foreground mt-6">
           Already have an account?{" "}

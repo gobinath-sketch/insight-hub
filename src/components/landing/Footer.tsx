@@ -16,7 +16,7 @@ export function Footer() {
           <a href="#" className="hover:text-foreground transition-colors">Blog</a>
           <a href="#" className="hover:text-foreground transition-colors">Twitter</a>
         </div>
-        <p className="text-sm text-muted-foreground">© 2026 24hr Engine. All rights reserved.</p>
+        <p className="text-sm text-muted-foreground">© Zenovate All rights reserved.</p>
       </div>
     </footer>
   );

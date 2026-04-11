@@ -1,9 +1,11 @@
 import { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Briefcase, Shield, Plane, LayoutDashboard, Settings, BarChart3, CreditCard, Key, Bell, Search, ChevronLeft } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Briefcase, Shield, Plane, LayoutDashboard, Settings, BarChart3, CreditCard, Key, Bell, Search, ChevronLeft, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -18,11 +20,13 @@ const navItems = [
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { profile } = useUserProfile();
 
   return (
-    <div className="min-h-screen flex">
+    <div className="h-screen overflow-hidden flex">
       {/* Sidebar */}
-      <aside className="w-64 border-r bg-sidebar flex flex-col shrink-0 hidden lg:flex">
+      <aside className="w-64 border-r bg-sidebar flex flex-col shrink-0 hidden lg:flex h-screen">
         <div className="h-16 flex items-center px-5 border-b">
           <Link to="/" className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-foreground flex items-center justify-center">
@@ -39,7 +43,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-1 space-y-0.5">
+        <nav className="flex-1 px-3 py-1 space-y-0.5 overflow-auto">
           {navItems.map((item) => {
             const active = location.pathname === item.path;
             return (
@@ -60,19 +64,30 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className="p-3 border-t">
+        <div className="p-3 border-t space-y-3 mt-auto">
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">JD</div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">Jane Doe</p>
-              <p className="text-xs text-muted-foreground truncate">jane@example.com</p>
+              <p className="text-sm font-medium truncate">{profile?.full_name || "User"}</p>
+              <p className="text-xs text-muted-foreground truncate">{profile?.email || ""}</p>
             </div>
           </div>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-lg"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate("/login", { replace: true });
+            }}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </Button>
         </div>
       </aside>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-screen">
         <header className="h-16 border-b flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center gap-3">
             <Link to="/" className="lg:hidden">
