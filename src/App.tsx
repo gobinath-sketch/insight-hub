@@ -19,6 +19,7 @@ import ApiKeys from "./pages/ApiKeys";
 import DashboardSettings from "./pages/DashboardSettings";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "@/components/auth/RequireAuth";
+import HandyScrapper from "./pages/HandyScrapper";
 
 const queryClient = new QueryClient();
 
@@ -47,11 +48,12 @@ const App = () => (
               <Route path="/dashboard/jobs" element={<JobFinder />} />
               <Route path="/dashboard/competitive" element={<CompetitiveIntel />} />
               <Route path="/dashboard/travel" element={<TravelPlanner />} />
-              <Route path="/dashboard/analytics" element={<Analytics />} />
-              <Route path="/dashboard/billing" element={<Billing />} />
-              <Route path="/dashboard/api-keys" element={<ApiKeys />} />
-              <Route path="/dashboard/settings" element={<DashboardSettings />} />
-            </Route>
+            <Route path="/dashboard/analytics" element={<Analytics />} />
+            <Route path="/dashboard/billing" element={<Billing />} />
+            <Route path="/dashboard/api-keys" element={<ApiKeys />} />
+            <Route path="/dashboard/settings" element={<DashboardSettings />} />
+            <Route path="/dashboard/handy" element={<HandyScrapper />} />
+          </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

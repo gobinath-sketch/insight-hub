@@ -63,3 +63,27 @@ begin
   alter publication supabase_realtime add table api_keys;
 exception when duplicate_object then null;
 end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table jobs;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table job_runs;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table job_outputs;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table apify_runs;
+exception when duplicate_object then null;
+end $$;

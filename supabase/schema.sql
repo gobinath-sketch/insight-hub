@@ -126,6 +126,54 @@ create table if not exists api_keys (
   created_at timestamptz default now()
 );
 
+-- HandyScrapper jobs
+create table if not exists jobs (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade,
+  type text,
+  status text,
+  input_json jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists job_runs (
+  id uuid primary key default uuid_generate_v4(),
+  job_id uuid references jobs(id) on delete cascade,
+  stage text,
+  logs text,
+  error text,
+  started_at timestamptz default now(),
+  finished_at timestamptz
+);
+
+create table if not exists job_outputs (
+  id uuid primary key default uuid_generate_v4(),
+  job_id uuid references jobs(id) on delete cascade,
+  type text,
+  storage_path text,
+  metadata jsonb,
+  created_at timestamptz default now()
+);
+
+create table if not exists apify_runs (
+  id uuid primary key default uuid_generate_v4(),
+  job_id uuid references jobs(id) on delete cascade,
+  actor_id text,
+  dataset_id text,
+  stats jsonb,
+  created_at timestamptz default now()
+);
+
+-- Storage buckets
+insert into storage.buckets (id, name, public)
+values ('inputs', 'inputs', false)
+on conflict (id) do nothing;
+
+insert into storage.buckets (id, name, public)
+values ('outputs', 'outputs', false)
+on conflict (id) do nothing;
+
 -- Storage bucket for resumes
 insert into storage.buckets (id, name, public)
 values ('resumes', 'resumes', false)

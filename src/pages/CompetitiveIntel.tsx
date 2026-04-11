@@ -10,6 +10,7 @@ import { Shield, Search, Globe, TrendingUp, TrendingDown, Minus, AlertTriangle, 
 import { supabase, supabaseEnabled } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { subscribeToTable } from "@/lib/realtime";
+import { createJob, getSignedUrl, listJobOutputs } from "@/lib/jobs";
 
 type CompetitorReport = {
   id?: string;
@@ -28,6 +29,8 @@ const CompetitiveIntel = () => {
   const [loading, setLoading] = useState(false);
   const [urls, setUrls] = useState([""]);
   const [report, setReport] = useState<CompetitorReport | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobOutputs, setJobOutputs] = useState<{ id: string; type: string; url: string | null }[]>([]);
 
   const userId = session?.user?.id;
 
@@ -92,6 +95,25 @@ const CompetitiveIntel = () => {
     setLoading(false);
   };
 
+  const handleGenerate = async () => {
+    if (!userId) return;
+    const urlList = urls.filter((u) => u.trim().length > 0);
+    const { jobId: createdId } = await createJob("competitor", { urls: urlList });
+    setJobId(createdId);
+  };
+
+  useEffect(() => {
+    const loadOutputs = async () => {
+      if (!jobId) return;
+      const items = await listJobOutputs(jobId);
+      const urls = await Promise.all(
+        items.map(async (o) => ({ id: o.id, type: o.type, url: await getSignedUrl(o.storage_path) }))
+      );
+      setJobOutputs(urls);
+    };
+    loadOutputs();
+  }, [jobId]);
+
   const swot = report?.swot ?? { strengths: [], weaknesses: [], opportunities: [], threats: [] };
   const pricing = report?.pricing ?? [];
   const signals = report?.signals ?? [];
@@ -127,11 +149,23 @@ const CompetitiveIntel = () => {
             <Button variant="outline" size="sm" className="rounded-lg" onClick={() => setUrls([...urls, ""])}>
               <Plus className="mr-1 h-3 w-3" /> Add URL
             </Button>
-            <Button onClick={handleAnalyze} className="rounded-xl h-10">
+            <Button onClick={handleGenerate} className="rounded-xl h-10">
               <Search className="mr-2 h-4 w-4" /> Analyze competitors
             </Button>
           </div>
         </motion.div>
+
+        {jobOutputs.length > 0 && (
+          <div className="bg-card border rounded-xl p-4 mb-6">
+            <div className="flex items-center gap-3">
+              {jobOutputs.map((o) => (
+                <a key={o.id} href={o.url ?? "#"} className="text-sm underline">
+                  {o.type.toUpperCase()}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {loading && (
           <div className="grid md:grid-cols-2 gap-4">

@@ -11,6 +11,7 @@ import { Plane, Search, MapPin, Clock, DollarSign, Utensils, Camera, Sun, CloudR
 import { supabase, supabaseEnabled } from "@/lib/supabaseClient";
 import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 import { subscribeToTable } from "@/lib/realtime";
+import { createJob, getSignedUrl, listJobOutputs } from "@/lib/jobs";
 
 type DayPlan = {
   day: number;
@@ -46,6 +47,8 @@ const TravelPlanner = () => {
   const [travelStyle, setTravelStyle] = useState("balanced");
   const [pace, setPace] = useState("moderate");
   const [interests, setInterests] = useState("");
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobOutputs, setJobOutputs] = useState<{ id: string; type: string; url: string | null }[]>([]);
 
   const userId = session?.user?.id;
 
@@ -112,6 +115,32 @@ const TravelPlanner = () => {
     setLoading(false);
   };
 
+  const handleGenerate = async () => {
+    if (!userId) return;
+    const { jobId: createdId } = await createJob("travel", {
+      destination,
+      dates,
+      budget,
+      travelers,
+      travelStyle,
+      pace,
+      interests,
+    });
+    setJobId(createdId);
+  };
+
+  useEffect(() => {
+    const loadOutputs = async () => {
+      if (!jobId) return;
+      const items = await listJobOutputs(jobId);
+      const urls = await Promise.all(
+        items.map(async (o) => ({ id: o.id, type: o.type, url: await getSignedUrl(o.storage_path) }))
+      );
+      setJobOutputs(urls);
+    };
+    loadOutputs();
+  }, [jobId]);
+
   const typeIcons = { attraction: Camera, food: Utensils, transport: Plane, rest: Sun };
 
   return (
@@ -175,10 +204,22 @@ const TravelPlanner = () => {
               <Input className="rounded-xl h-10" value={interests} onChange={(e) => setInterests(e.target.value)} />
             </div>
           </div>
-          <Button onClick={handlePlan} className="rounded-xl h-10">
+          <Button onClick={handleGenerate} className="rounded-xl h-10">
             <Search className="mr-2 h-4 w-4" /> Generate itinerary
           </Button>
         </motion.div>
+
+        {jobOutputs.length > 0 && (
+          <div className="bg-card border rounded-xl p-4 mb-6">
+            <div className="flex items-center gap-3">
+              {jobOutputs.map((o) => (
+                <a key={o.id} href={o.url ?? "#"} className="text-sm underline">
+                  {o.type.toUpperCase()}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {loading && (
           <div className="space-y-4">

@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Briefcase, Shield, Plane, LayoutDashboard, Settings, BarChart3, CreditCard, Key, Bell, Search, ChevronLeft, LogOut } from "lucide-react";
+import { Briefcase, Shield, Plane, LayoutDashboard, Settings, BarChart3, CreditCard, Key, Bell, Search, ChevronLeft, LogOut, MessageSquareText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,10 @@ const navItems = [
   { icon: CreditCard, label: "Billing", path: "/dashboard/billing" },
   { icon: Key, label: "API Keys", path: "/dashboard/api-keys" },
   { icon: Settings, label: "Settings", path: "/dashboard/settings" },
+];
+
+const handyItems = [
+  { icon: MessageSquareText, label: "HandyScrapper", path: "/dashboard/handy" },
 ];
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
@@ -43,8 +47,26 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-1 space-y-0.5 overflow-auto">
+        <nav className="flex-1 px-3 py-1 space-y-2 overflow-auto">
           {navItems.map((item) => {
+            const active = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                  active
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                )}
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            );
+          })}
+          {handyItems.map((item) => {
             const active = location.pathname === item.path;
             return (
               <Link
