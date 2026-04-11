@@ -51,11 +51,11 @@ const Billing = () => {
     if (!userId) return;
     loadBilling();
     const unsubProfile = subscribeToTable("billing_profile", (payload) => {
-      if (payload.new?.user_id !== userId) return;
+      if ((payload.new as any)?.user_id !== userId) return;
       loadBilling();
     });
     const unsubInvoices = subscribeToTable("billing_invoices", (payload) => {
-      if (payload.new?.user_id !== userId) return;
+      if ((payload.new as any)?.user_id !== userId) return;
       loadBilling();
     });
     return () => {

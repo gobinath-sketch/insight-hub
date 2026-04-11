@@ -71,7 +71,7 @@ const TravelPlanner = () => {
     if (!userId || !supabaseEnabled || !supabase) return;
     loadLatestPlan();
     const unsub = subscribeToTable<TravelPlanRow>("travel_plans", (payload) => {
-      if (payload.new?.user_id !== userId) return;
+      if ((payload.new as any)?.user_id !== userId) return;
       loadLatestPlan();
     });
     return () => unsub();

@@ -43,8 +43,8 @@ const DashboardSettings = () => {
     loadSettings();
     if (!userId || !supabaseEnabled || !supabase) return;
     const unsub = subscribeToTable("user_settings", (payload) => {
-      if (payload.new?.user_id !== userId) return;
-      if (payload.new?.notifications) setNotifications(payload.new.notifications);
+      if ((payload.new as any)?.user_id !== userId) return;
+      if ((payload.new as any)?.notifications) setNotifications((payload.new as any).notifications);
     });
     return () => unsub();
   }, [userId, profile?.id]);

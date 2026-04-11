@@ -53,7 +53,7 @@ const CompetitiveIntel = () => {
     if (!userId || !supabaseEnabled || !supabase) return;
     loadLatestReport();
     const unsub = subscribeToTable<CompetitorReport>("competitor_reports", (payload) => {
-      if (payload.new?.user_id !== userId) return;
+      if ((payload.new as any)?.user_id !== userId) return;
       loadLatestReport();
     });
     return () => unsub();

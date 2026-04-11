@@ -38,7 +38,7 @@ const ApiKeys = () => {
     if (!userId || !supabaseEnabled || !supabase) return;
     loadKeys();
     const unsub = subscribeToTable<ApiKeyRow>("api_keys", (payload) => {
-      if (payload.new?.user_id !== userId) return;
+      if ((payload.new as any)?.user_id !== userId) return;
       loadKeys();
     });
     return () => unsub();

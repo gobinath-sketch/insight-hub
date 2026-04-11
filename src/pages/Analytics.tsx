@@ -28,7 +28,7 @@ const Analytics = () => {
     if (!userId) return;
     loadEvents();
     const unsub = subscribeToTable<UsageEvent>("usage_events", (payload) => {
-      if (payload.new?.user_id !== userId) return;
+      if ((payload.new as any)?.user_id !== userId) return;
       loadEvents();
     });
     return () => unsub();

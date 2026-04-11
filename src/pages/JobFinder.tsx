@@ -81,12 +81,12 @@ const JobFinder = () => {
     loadLatestSearch();
 
     const unsubSearches = subscribeToTable("job_searches", (payload) => {
-      if (payload.new?.user_id !== userId) return;
+      if ((payload.new as any)?.user_id !== userId) return;
       loadLatestSearch();
     });
     const unsubJobs = subscribeToTable("job_results", (payload) => {
       if (!activeSearchId) return;
-      if (payload.new?.search_id !== activeSearchId) return;
+      if ((payload.new as any)?.search_id !== activeSearchId) return;
       loadJobs(activeSearchId);
     });
 
