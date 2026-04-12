@@ -10,7 +10,7 @@ import { supabase, supabaseEnabled } from "@/lib/supabaseClient";
 import { Paperclip, Send, X, TriangleAlert } from "lucide-react";
 
 const HandyScrapper = () => {
-  const { session } = useSupabaseSession();
+  const { session, loading } = useSupabaseSession();
   const userId = session?.user?.id;
   const [jobType] = useState<JobType>("handy");
   const [message, setMessage] = useState("");
@@ -150,116 +150,120 @@ const HandyScrapper = () => {
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-4">
-          <div className="bg-card border rounded-2xl p-5 flex flex-col h-[calc(100vh-9rem)] shadow-sm">
-            <div className="flex items-center justify-between pb-4 border-b">
-              <div>
-                <h1 className="text-xl font-semibold">HandyScrapper</h1>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto py-5 space-y-3">
-              {!userId ? (
-                <div className="flex items-center gap-2 text-xs text-destructive">
-                  <TriangleAlert className="h-4 w-4" />
-                  You are not logged in. Sign in to send jobs.
-                </div>
-              ) : null}
-              {messages.map((m) => {
-                const lines = m.text.split("\n");
-                const isLinks = lines.some((l) => l.startsWith("PDF:") || l.startsWith("DOCX:") || l.startsWith("CSV:"));
-                return (
-                  <div
-                    key={m.id}
-                    className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed ${
-                      m.role === "user"
-                        ? "ml-auto bg-foreground text-primary-foreground"
-                        : "bg-muted text-foreground"
-                    }`}
-                  >
-                    {isLinks ? (
-                      <div className="space-y-1">
-                        {lines.map((l) => {
-                          const [label, url] = l.split(": ").map((s) => s.trim());
-                          if (!url) return <div key={l}>{l}</div>;
-                          return (
-                            <a key={l} href={url} className="underline block" target="_blank" rel="noreferrer">
-                              {label}
-                            </a>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      m.text
-                    )}
-                  </div>
-                );
-              })}
-              {polling ? (
-                <div className="max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed bg-muted text-foreground">
-                  Processing… extracting resume → scraping → generating report
-                </div>
-              ) : null}
-            </div>
-
-            <div className="border-t pt-4 space-y-3">
-              {files.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {files.map((file, idx) => (
-                    <span key={`${file.name}-${idx}`} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-muted text-xs">
-                      {file.name}
-                      <button
-                        type="button"
-                        onClick={() => setFiles(files.filter((_, i) => i !== idx))}
-                        className="h-4 w-4 rounded-full hover:bg-background flex items-center justify-center"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div className="relative bg-muted/40 border rounded-full px-3 py-2 flex items-center gap-2">
-                <label
-                  htmlFor="handy-files"
-                  className="h-9 w-9 rounded-full bg-background border flex items-center justify-center cursor-pointer hover:bg-muted"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </label>
-                <Input
-                  id="handy-files"
-                  type="file"
-                  multiple
-                  onChange={(e) => {
-                    const next = Array.from(e.target.files ?? []);
-                    if (!next.length) return;
-                    setFiles((prev) => [...prev, ...next]);
-                    e.currentTarget.value = "";
-                  }}
-                  className="hidden"
-                />
-                <Textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      submit();
-                    }
-                  }}
-                  className="min-h-[44px] h-11 resize-none border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 flex-1 pr-28"
-                  placeholder="Type your request and attach files if needed..."
-                />
-                <Button
-                  className="absolute right-2 h-9 px-4 rounded-full z-10"
-                  onClick={submit}
-                  disabled={sending || (!message.trim() && files.length === 0)}
-                >
-                  <Send className="h-4 w-4 mr-1" /> Send
-                </Button>
-              </div>
+        <div className="bg-card border rounded-2xl p-5 flex flex-col h-[calc(100vh-9rem)] shadow-sm">
+          <div className="flex items-center justify-between pb-4 border-b">
+            <div>
+              <h1 className="text-xl font-semibold">HandyScrapper</h1>
             </div>
           </div>
+
+          <div className="flex-1 overflow-auto py-5 space-y-3">
+            {!loading && !userId ? (
+              <div className="flex items-center gap-2 text-xs text-destructive">
+                <TriangleAlert className="h-4 w-4" />
+                You are not logged in. Sign in to send jobs.
+              </div>
+            ) : null}
+            {loading ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                Checking session…
+              </div>
+            ) : null}
+            {messages.map((m) => {
+              const lines = m.text.split("\n");
+              const isLinks = lines.some((l) => l.startsWith("PDF:") || l.startsWith("DOCX:") || l.startsWith("CSV:"));
+              return (
+                <div
+                  key={m.id}
+                  className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed ${m.role === "user"
+                      ? "ml-auto bg-foreground text-primary-foreground"
+                      : "bg-muted text-foreground"
+                    }`}
+                >
+                  {isLinks ? (
+                    <div className="space-y-1">
+                      {lines.map((l) => {
+                        const [label, url] = l.split(": ").map((s) => s.trim());
+                        if (!url) return <div key={l}>{l}</div>;
+                        return (
+                          <a key={l} href={url} className="underline block" target="_blank" rel="noreferrer">
+                            {label}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    m.text
+                  )}
+                </div>
+              );
+            })}
+            {polling ? (
+              <div className="max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed bg-muted text-foreground">
+                Processing… extracting resume → scraping → generating report
+              </div>
+            ) : null}
+          </div>
+
+          <div className="border-t pt-4 space-y-3">
+            {files.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {files.map((file, idx) => (
+                  <span key={`${file.name}-${idx}`} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-muted text-xs">
+                    {file.name}
+                    <button
+                      type="button"
+                      onClick={() => setFiles(files.filter((_, i) => i !== idx))}
+                      className="h-4 w-4 rounded-full hover:bg-background flex items-center justify-center"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="relative bg-muted/40 border rounded-full px-3 py-2 flex items-center gap-2">
+              <label
+                htmlFor="handy-files"
+                className="h-9 w-9 rounded-full bg-background border flex items-center justify-center cursor-pointer hover:bg-muted"
+              >
+                <Paperclip className="h-4 w-4" />
+              </label>
+              <Input
+                id="handy-files"
+                type="file"
+                multiple
+                onChange={(e) => {
+                  const next = Array.from(e.target.files ?? []);
+                  if (!next.length) return;
+                  setFiles((prev) => [...prev, ...next]);
+                  e.currentTarget.value = "";
+                }}
+                className="hidden"
+              />
+              <Textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submit();
+                  }
+                }}
+                className="min-h-[44px] h-11 resize-none border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 flex-1 pr-28"
+                placeholder="Type your request and attach files if needed..."
+              />
+              <Button
+                className="absolute right-2 h-9 px-4 rounded-full z-10"
+                onClick={submit}
+                disabled={sending || (!message.trim() && files.length === 0)}
+              >
+                <Send className="h-4 w-4 mr-1" /> Send
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );

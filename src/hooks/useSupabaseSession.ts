@@ -28,6 +28,15 @@ export function useSupabaseSession() {
         setSession(lastSession);
         await ensureUserProfile(lastSession);
       }
+      if (!data.session && !error) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (!mounted) return;
+        if (refreshed.session) {
+          lastSession = refreshed.session;
+          setSession(refreshed.session);
+          await ensureUserProfile(refreshed.session);
+        }
+      }
       setLoading(false);
       clearTimeout(timeout);
     });
@@ -40,12 +49,21 @@ export function useSupabaseSession() {
 
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
-        supabase.auth.getSession().then(({ data, error }) => {
+        supabase.auth.getSession().then(async ({ data, error }) => {
           if (!mounted) return;
           if (error) return;
           if (data.session?.access_token !== lastSession?.access_token) {
             lastSession = data.session ?? null;
             setSession(lastSession);
+          }
+          if (!data.session) {
+            const { data: refreshed } = await supabase.auth.refreshSession();
+            if (!mounted) return;
+            if (refreshed.session) {
+              lastSession = refreshed.session;
+              setSession(refreshed.session);
+              await ensureUserProfile(refreshed.session);
+            }
           }
         });
       }

@@ -6,7 +6,11 @@ const RequireAuth = () => {
   const location = useLocation();
 
   if (loading) {
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="text-sm text-muted-foreground">Checking session…</div>
+      </div>
+    );
   }
 
   if (!session) {

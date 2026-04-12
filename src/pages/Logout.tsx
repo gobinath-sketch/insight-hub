@@ -15,18 +15,25 @@ const Logout = () => {
         // ignore
       }
       try {
-        localStorage.clear();
-        sessionStorage.clear();
+        // Remove only Supabase auth keys to avoid nuking other app state.
+        Object.keys(localStorage).forEach((key) => {
+          if (key.includes("supabase") || key.includes("sb-")) {
+            localStorage.removeItem(key);
+          }
+        });
       } catch {
         // ignore
       }
       navigate("/login", { replace: true });
-      window.location.href = "/login";
     };
     run();
   }, [navigate]);
 
-  return null;
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="text-sm text-muted-foreground">Signing you out…</div>
+    </div>
+  );
 };
 
 export default Logout;

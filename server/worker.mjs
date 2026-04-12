@@ -85,19 +85,12 @@ async function callClaude(system, user) {
   return content;
 }
 
-async function runApifyGoogleSearch(queries) {
+async function runApifyActor(actorId, payload) {
   if (!APIFY_TOKEN) {
     throw new Error("Missing APIFY_TOKEN");
   }
-  const payload = {
-    queries: Array.isArray(queries) ? queries.join("\n") : queries,
-    maxPagesPerQuery: 1,
-    resultsPerPage: 10,
-    languageCode: "en",
-    mobileResults: false,
-    countryCode: "us",
-  };
-  const url = `https://api.apify.com/v2/acts/apify~google-search-scraper/run-sync-get-dataset-items?token=${APIFY_TOKEN}`;
+  const encoded = actorId.replace(/\//g, "~");
+  const url = `https://api.apify.com/v2/acts/${encoded}/run-sync-get-dataset-items?token=${APIFY_TOKEN}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -255,22 +248,48 @@ async function processJob(job) {
   const skillIndex = loadSkillIndex();
   const resumeFiles = job.input_json?.files || [];
   const resumeText = await extractResumeText(resumeFiles);
-  const queries = buildQueries(job.type, job.input_json || {});
-  await logRun(job.id, "queries", JSON.stringify(queries));
+  const defaultQueries = buildQueries(job.type, job.input_json || {});
+  
+  const actorSystem = "You are an intelligent data-gathering planner. Based on the user's input, context, and the provided skills index, determine the SINGLE BEST Apify Actor to answer this request out of the 4000+ available. Return your answer as a raw strict JSON object with no markdown and no extra text: {\"actorId\": \"string\", \"payload\": {}}";
+  
+  const actorUser = `Job type: ${job.type}\nInput: ${JSON.stringify(job.input_json)}\nSkills Index provided: ${skillIndex.docs ? 'Loaded' : 'None'}\nDecide the BEST Apify actor (e.g. apify/google-search-scraper, apify/instagram-scraper, triotek/linkedin-jobs-scraper, apify/tripadvisor-scraper, etc.) and construct its payload. Return VALID JSON ONLY.`;
+  
+  let actorId = "apify/google-search-scraper";
+  let payload = { queries: defaultQueries.join("\n"), maxPagesPerQuery: 1, resultsPerPage: 10 };
+  
+  try {
+    const rawResponse = await callClaude(actorSystem, actorUser);
+    const cleaned = rawResponse.replace(/```json/g, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    if(parsed.actorId) actorId = parsed.actorId;
+    if(parsed.payload) payload = parsed.payload;
+  } catch(e) {
+    // Keep defaults on failure
+  }
 
-  const searchResults = await runApifyGoogleSearch(queries);
+  await logRun(job.id, "actor_selection", `Extracted data using actor: ${actorId}`);
+
+  let searchResults = [];
+  try {
+    searchResults = await runApifyActor(actorId, payload);
+  } catch (e) {
+    await logRun(job.id, "error", `Custom actor ${actorId} failed, falling back. ${e.message}`);
+    actorId = "apify/google-search-scraper";
+    payload = { queries: defaultQueries.join("\n"), maxPagesPerQuery: 1, resultsPerPage: 10 };
+    searchResults = await runApifyActor(actorId, payload);
+  }
+
   await supabase.from("apify_runs").insert({
     job_id: job.id,
-    actor_id: "apify/google-search-scraper",
+    actor_id: actorId,
     dataset_id: "inline",
-    stats: { results: searchResults.length },
+    stats: { results: searchResults?.length ?? 0 },
   });
 
-  const compact = searchResults.slice(0, 20).map((r) => ({
-    title: r.title,
-    url: r.url,
-    description: r.description,
-  }));
+  const compact = (searchResults || []).slice(0, 30).map((r) => {
+    // Condense outputs dynamically since actor shapes are unknown
+    return Object.fromEntries(Object.entries(r).filter(([k, v]) => typeof v === "string" || typeof v === "number"));
+  });
 
   const system =
     "You are HandyScrapper. Use the provided skills index to guide how you process tasks. " +
