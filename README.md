@@ -1,4 +1,4 @@
-# 🔍 Handy Scrapper
+#  Handy Scrapper
 
 > **The Intelligent Agent-Driven Data Extraction & Insight Engine**
 
@@ -11,18 +11,18 @@ Handy Scrapper is a state-of-the-art AI agent designed to bridge the gap between
 
 ---
 
-## 🚀 Key Features
+##  Key Features
 
-- **🧠 AI-Driven Orchestration**: Claude 3.5 intelligently selects the optimal scraping strategy (Apify Actors) based on your natural language input.
-- **📄 Multi-Source Intelligence**: Seamlessly integrates uploaded documents (PDF, DOCX) to ground research in your data.
-- **📊 Automated Reporting**: Generates high-fidelity professional reports in **PDF**, **DOCX**, and **CSV** formats automatically.
-- **⚡ Real-time Job Tracking**: Watch your agent work through stages: *Selection* → *Extraction* → *Synthesis* → *Delivery*.
-- **🌐 4000+ Scraping Capabilities**: Access specialized scrapers for LinkedIn, Instagram, Google, TripAdvisor, and more.
-- **🛠️ Extensible Skill System**: Powered by a robust modular "Skills Index" that defines the agent's core capabilities.
+- ** AI-Driven Orchestration**: Claude 3.5 intelligently selects the optimal scraping strategy (Apify Actors) based on your natural language input.
+- ** Multi-Source Intelligence**: Seamlessly integrates uploaded documents (PDF, DOCX) to ground research in your data.
+- ** Automated Reporting**: Generates high-fidelity professional reports in **PDF**, **DOCX**, and **CSV** formats automatically.
+- ** Real-time Job Tracking**: Watch your agent work through stages: *Selection* → *Extraction* → *Synthesis* → *Delivery*.
+- ** 4000+ Scraping Capabilities**: Access specialized scrapers for LinkedIn, Instagram, Google, TripAdvisor, and more.
+- ** Extensible Skill System**: Powered by a robust modular "Skills Index" that defines the agent's core capabilities.
 
 ---
 
-## 🗺️ How It Works
+##  How It Works
 
 ```mermaid
 graph TD
@@ -40,7 +40,7 @@ graph TD
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 ### Frontend
 - **Framework**: React 18 + Vite
@@ -58,35 +58,35 @@ graph TD
 
 ---
 
-## ⚡ Agent Skills & Domain Expertise
+##  Agent Skills & Domain Expertise
 
 The Handy Scrapper agent is equipped with specialized domain-specific skills:
 
-- **💼 Job Market Insights**: Automated career matching, skill gap analysis, and salary benchmarking.
-- **📈 Competitor Intelligence**: SWOT analysis, pricing monitoring, and strategic positioning research.
-- **📍 Travel Engineering**: Itinerary generation, attraction scoring, and restaurant recommendations.
-- **🔬 Deep Research**: Synthesis of large-scale web results into concise executive summaries.
+- ** Job Market Insights**: Automated career matching, skill gap analysis, and salary benchmarking.
+- ** Competitor Intelligence**: SWOT analysis, pricing monitoring, and strategic positioning research.
+- ** Travel Engineering**: Itinerary generation, attraction scoring, and restaurant recommendations.
+- ** Deep Research**: Synthesis of large-scale web results into concise executive summaries.
 
 ---
 
-## 📂 Project Structure
+##  Project Structure
 
 ```text
 insight-hub/
-├── 📁 Skills/           # Integrated AI Skill Libraries & Prompts
-├── 📁 server/           # Bun Worker & AI Core logic
-├── 📁 src/              # React Dashboard & UI Components
-│   ├── 📁 components/   # Modular Shadcn UI elements
-│   ├── 📁 pages/        # Dashboard, Analysis, & Report views
-│   └── 📁 lib/          # Utilities & Supabase client
-├── 📁 supabase/         # Database migrations & schemas
-├── 📄 package.json      # Dependencies & Scripts
-└── 📄 README.md         # You are here!
+├──  Skills/           # Integrated AI Skill Libraries & Prompts
+├──  server/           # Bun Worker & AI Core logic
+├──  src/              # React Dashboard & UI Components
+│   ├──  components/   # Modular Shadcn UI elements
+│   ├──  pages/        # Dashboard, Analysis, & Report views
+│   └──  lib/          # Utilities & Supabase client
+├──  supabase/         # Database migrations & schemas
+├──  package.json      # Dependencies & Scripts
+└──  README.md         # You are here!
 ```
 
 ---
 
-## ⚙️ Getting Started
+##  Getting Started
 
 ### Prerequisites
 - [Bun](https://bun.sh/) or Node.js installed
@@ -119,7 +119,7 @@ insight-hub/
 
 ---
 
-## 🛡️ Future-Proof Architecture
+##  Future-Proof Architecture
 
 Handy Scrapper is built with **Resiliency First** in mind:
 - **Fallback Logic**: If a specialized scraper fails, the agent automatically falls back to a generalized search strategy to ensure results.
